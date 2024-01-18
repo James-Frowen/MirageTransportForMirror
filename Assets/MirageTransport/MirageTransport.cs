@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Net;
 using Mirage.SocketLayer;
 using Mirage.Sockets.Udp;
+using Mirage.TransportForMirror;
 using Mirror;
 using UnityEngine;
-
 
 namespace Mirage.TransportForMirror
 {
@@ -264,6 +264,48 @@ namespace Mirage.TransportForMirror
             {
                 // find way to get channel?
                 handler.Invoke(connection.GetHashCode(), message, 0);
+            }
+        }
+    }
+
+    public static class MirageTransportNotifyExtension
+    {
+        public static void SendNotify<T>(this NetworkConnection conn, T message, INotifyCallBack callBack)
+            where T : struct, NetworkMessage
+        {
+            // can't send notify for local, just use mirror's normal send instead
+            if (conn is LocalConnectionToClient || conn is LocalConnectionToServer)
+            {
+                conn.Send(message, Channels.Unreliable);
+                // mark as delieved, can't be lost for local
+                callBack.Notify(true);
+                return;
+            }
+
+
+            using (var writer = NetworkWriterPool.Get())
+            {
+                // pack message
+                NetworkMessages.Pack(message, writer);
+                var transport = (MirageTransport)Transport.active;
+
+                // +1 because Unreliable does -1
+                var max = transport.GetMaxPacketSize(Channels.Unreliable) + 1 - AckSystem.NOTIFY_HEADER_SIZE;
+                if (writer.Position > max)
+                {
+                    Debug.LogError($"NetworkConnection.Send: message of type {typeof(T)} with a size of {writer.Position} bytes is larger than the max allowed message size in one batch: {max}.\nThe message was dropped, please make it smaller.");
+                    return;
+                }
+
+                var segment = writer.ToArraySegment();
+                if (conn is NetworkConnectionToClient)
+                {
+                    transport.ServerSendNotify(conn.connectionId, segment, callBack);
+                }
+                else if (conn is NetworkConnectionToServer)
+                {
+                    transport.ClientSendNotify(segment, callBack);
+                }
             }
         }
     }
