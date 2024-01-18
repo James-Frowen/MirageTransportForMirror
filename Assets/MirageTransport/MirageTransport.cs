@@ -23,8 +23,16 @@ namespace Mirage.TransportForMirror
         [Tooltip("Will not change level on already runner server (stop and start server/client to use new level")]
         [SerializeField] private LogType loglevel;
 
+        /// <summary>
+        /// Config to modify BEFORE starting the transport
+        /// </summary>
+        public Config Config { get; set; } = new Config()
+        {
+            // set default connections high, Mirror has its own limit anyway
+            MaxConnections = 10_000
+        };
+
         private Peer peer;
-        private Config config = new Config();
         private MessageHandler messageHandler;
         private IConnection clientConnection;
         private Dictionary<int, IConnection> serverConnections;
@@ -83,7 +91,7 @@ namespace Mirage.TransportForMirror
             var socket = socketFactory.CreateClientSocket();
             messageHandler = new MessageHandler((_, s, c) => OnClientDataReceived.Invoke(s, c));
 
-            peer = new Peer(socket, socketFactory.MaxPacketSize, messageHandler, config, new Logger(Debug.unityLogger) { filterLogType = loglevel });
+            peer = new Peer(socket, socketFactory.MaxPacketSize, messageHandler, Config, new Logger(Debug.unityLogger) { filterLogType = loglevel });
 
             peer.OnConnected += (c) => OnClientConnected.Invoke();
             peer.OnDisconnected += (c, reason) => OnClientDisconnected.Invoke();
@@ -169,7 +177,7 @@ namespace Mirage.TransportForMirror
             var socket = socketFactory.CreateServerSocket();
             messageHandler = new MessageHandler((conn, s, chan) => OnServerDataReceived.Invoke(conn, s, chan));
 
-            peer = new Peer(socket, socketFactory.MaxPacketSize, messageHandler, config, new Logger(Debug.unityLogger) { filterLogType = loglevel });
+            peer = new Peer(socket, socketFactory.MaxPacketSize, messageHandler, Config, new Logger(Debug.unityLogger) { filterLogType = loglevel });
 
             serverConnections = new Dictionary<int, IConnection>();
             peer.OnConnected += (c) => { serverConnections.Add(c.GetHashCode(), c); OnServerConnected.Invoke(c.GetHashCode()); };
