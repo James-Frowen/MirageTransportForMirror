@@ -1,9 +1,9 @@
-using Mirage.SocketLayer;
-using Mirage.Sockets.Udp;
-using Mirror;
 using System;
 using System.Collections.Generic;
 using System.Net;
+using Mirage.SocketLayer;
+using Mirage.Sockets.Udp;
+using Mirror;
 using UnityEngine;
 
 
@@ -115,16 +115,14 @@ namespace Mirage.TransportForMirror
         {
             switch (channelId)
             {
-                default:
                 case 0:
                     connection.SendReliable(segment);
                     break;
                 case 1:
                     connection.SendUnreliable(segment);
                     break;
-                case 2:
-                    connection.SendNotify(segment);
-                    break;
+                default:
+                    throw new NotSupportedException($"Channel {channelId} not supported");
             }
         }
 
@@ -219,6 +217,30 @@ namespace Mirage.TransportForMirror
             messageHandler = null;
             serverConnections = null;
             clientConnection = null;
+        }
+
+
+        // Notify support
+        // user will need to call these directly, rather than using NetworkConnection send methods
+        // the connection id can found inside NetworkConnection
+        public void ClientSendNotify(ArraySegment<byte> segment, INotifyCallBack callBacks)
+        {
+            clientConnection.SendNotify(segment, callBacks);
+        }
+        public void ServerSendNotify(int connectionId, ArraySegment<byte> segment, INotifyCallBack callBacks)
+        {
+            var connection = serverConnections[connectionId];
+            connection.SendNotify(segment, callBacks);
+        }
+
+        public INotifyToken ClientSendNotify(ArraySegment<byte> segment)
+        {
+            return clientConnection.SendNotify(segment);
+        }
+        public INotifyToken ServerSendNotify(int connectionId, ArraySegment<byte> segment)
+        {
+            var connection = serverConnections[connectionId];
+            return connection.SendNotify(segment);
         }
 
         private class MessageHandler : IDataHandler
